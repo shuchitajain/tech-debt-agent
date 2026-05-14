@@ -3,7 +3,7 @@ Example file with various TODO markers for testing the scanner.
 DELETE THIS FILE after testing!
 """
 
-# TODO: Implement authentication
+# Authentication implemented! (was a TODO, now fixed)
 # This is a high-priority task
 
 
@@ -18,6 +18,7 @@ def process_data(items):
         print(result)
     
     # XXX: This entire function needs refactoring
+    # TODO: new - add caching for performance
     return True
 
 
@@ -41,3 +42,11 @@ message = "TODO: this should not be found"
 
 # But this should be found:
 # TODO: clean up this file
+
+
+# OLD CODE - should be detected as commented-out code:
+# def old_calculation(x, y):
+#     result = x * y
+#     if result > 100:
+#         return result / 2
+#     return result

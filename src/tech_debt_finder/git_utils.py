@@ -35,11 +35,21 @@ Returns a CompletedProcess object with:
 """
 
 import subprocess
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from tech_debt_finder.scanner import Marker
+from tech_debt_finder.scanner import Marker, iter_code_files
+
+
+@dataclass
+class DormantFile:
+    """A file that hasn't been modified in a long time."""
+    file: str
+    days_since_modified: int
+    last_modified_date: str
+    last_author: str = "unknown"
 
 
 # =============================================================================
@@ -334,6 +344,54 @@ def get_days_since_last_modified(file_path: str) -> int:
         return (now - last_date).days
     except ValueError:
         return 0
+
+
+def get_last_author(file_path: str) -> str:
+    """Get the author of the most recent commit to this file."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%an", "--", file_path],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
+def find_dormant_files(root: Path, dormant_days: int = 180) -> list[DormantFile]:
+    """
+    Find all files that haven't been modified in a long time.
+    
+    Args:
+        root: Directory to scan
+        dormant_days: Days without activity to consider "dormant"
+        
+    Returns:
+        List of DormantFile objects, sorted by age (oldest first)
+    """
+    dormant = []
+    
+    for file_path in iter_code_files(root):
+        days = get_days_since_last_modified(str(file_path))
+        
+        if days >= dormant_days:
+            last_date = get_last_modified_date(str(file_path)) or "unknown"
+            last_author = get_last_author(str(file_path))
+            
+            dormant.append(DormantFile(
+                file=str(file_path),
+                days_since_modified=days,
+                last_modified_date=last_date,
+                last_author=last_author,
+            ))
+    
+    # Sort by days (oldest first)
+    dormant.sort(key=lambda d: d.days_since_modified, reverse=True)
+    return dormant
 
 
 # =============================================================================

@@ -3,7 +3,7 @@ scanner.py — Find code rot markers in files
 
 This module walks through files and finds:
 - TODO, FIXME, HACK, TEMP, XXX comments
-- (Later: commented-out code blocks)
+- Commented-out code blocks (3+ consecutive lines)
 
 CONCEPTS EXPLAINED:
 
@@ -86,6 +86,26 @@ class Marker:
     priority_bucket: str = "low"  # "high", "medium", "low"
 
 
+@dataclass
+class CommentedCodeBlock:
+    """
+    Represents a block of commented-out code (dead code).
+    
+    These are 3+ consecutive comment lines that look like actual code,
+    not just explanatory comments.
+    """
+    file: str
+    start_line: int
+    end_line: int
+    line_count: int
+    preview: str  # First line of the block for context
+    
+    # Filled in by git_utils:
+    author: str = "unknown"
+    date: str = "unknown"
+    age_days: int = 0
+
+
 # =============================================================================
 # PATTERNS — What we're looking for
 # =============================================================================
@@ -98,7 +118,9 @@ class Marker:
 #   HTML:               <!-- comment -->
 #   SQL:                -- comment
 #
-# Our strategy: Look for common comment prefixes BEFORE the TODO marker.
+# Our strategy: Look for common comment prefixes IMMEDIATELY FOLLOWED by the marker.
+# This avoids false positives like "# was a TODO, now fixed" where TODO is mentioned
+# but not the actual marker.
 
 # Pattern for the TODO/FIXME/etc. part
 MARKER_WORDS = r'(TODO|FIXME|HACK|TEMP|XXX)'
@@ -119,10 +141,22 @@ COMMENT_PREFIXES = [
 ]
 
 # Build the complete patterns
-# Each pattern: COMMENT_PREFIX + anything + MARKER + optional colon/space + rest of line
+# STRICT: marker must come IMMEDIATELY after comment prefix (only whitespace allowed)
+# This prevents "# was a TODO" from matching
+#
+# Pattern: COMMENT_PREFIX + whitespace + MARKER + optional (author) + optional colon + rest
+# Examples that match:
+#   # TODO: fix this
+#   // FIXME: broken
+#   # TODO(alice): assigned task
+#   /* HACK - workaround */
+#
+# Examples that DON'T match:
+#   # was a TODO, now fixed
+#   # This has TODO in the middle
 MARKER_PATTERNS = [
     re.compile(
-        prefix + r'.*?' + MARKER_WORDS + r'[\s:]*(.*)$',
+        prefix + r'\s*' + MARKER_WORDS + r'(?:\([^)]*\))?[\s:\-]*(.*)$',
         re.IGNORECASE
     )
     for prefix in COMMENT_PREFIXES
@@ -276,6 +310,190 @@ def scan_file(file_path: Path) -> list[Marker]:
             markers.append(marker)
     
     return markers
+
+
+# =============================================================================
+# COMMENTED-OUT CODE DETECTION
+# =============================================================================
+
+# Patterns that suggest a comment line is actually code, not prose
+# Must be STRONG indicators that this is real code
+CODE_INDICATORS = [
+    r'\w+\s*=\s*\w',     # Assignments: x = 1, name = "foo" (not just bare =)
+    r'\w+\(',            # Function calls: foo(, bar(
+    r'def\s+\w+',        # Python function def
+    r'class\s+\w+',      # Class definition
+    r'return\s+\w',      # Return with value
+    r'if\s+\w',          # Conditionals with condition
+    r'for\s+\w',         # Loops with variable
+    r'while\s+\w',       # While loops
+    r'import\s+\w',      # Imports
+    r'from\s+\w',        # From imports
+    r'const\s+\w',       # Variable declarations
+    r'var\s+\w',         #
+    r'let\s+\w',         #
+    r'function\s+\w',    # JS function
+    r'=>',               # Arrow functions
+    r'\w+\.\w+\(',       # Method calls: obj.method(
+    r'\[\w+\]',          # Array access: arr[i]
+    r'raise\s+',         # Exceptions
+    r'throw\s+',         #
+    r'try:',             # Try blocks
+    r'except',           # Except blocks
+    r'catch\s*\(',       # Catch blocks
+]
+
+# Lines that look like separators/headers (NOT code)
+SEPARATOR_PATTERNS = [
+    r'^[#/\-=\*\s]+$',   # Lines with only comment chars and separators
+    r'^#+\s*$',          # Empty comment lines
+    r'^\s*\*+\s*$',      # Star separators
+]
+
+# Compiled pattern to check if a line looks like code
+CODE_LINE_PATTERN = re.compile('|'.join(CODE_INDICATORS))
+SEPARATOR_PATTERN = re.compile('|'.join(SEPARATOR_PATTERNS))
+
+# Comment prefix patterns (to strip the comment marker)
+COMMENT_PREFIX_STRIP = re.compile(r'^\s*(#|//|/\*|\*|<!--|--)\s*')
+
+
+def _looks_like_code(line: str) -> bool:
+    """Check if a comment line looks like actual code (not prose)."""
+    # Strip the comment prefix
+    stripped = COMMENT_PREFIX_STRIP.sub('', line).strip()
+    
+    # Empty line doesn't count
+    if not stripped:
+        return False
+    
+    # Check if it's just a separator/header line (not code)
+    if SEPARATOR_PATTERN.match(stripped):
+        return False
+    
+    # If line is mostly words (prose), it's probably not code
+    # Code has lots of symbols, prose has mostly letters and spaces
+    words = stripped.split()
+    if len(words) >= 4:
+        # Prose typically has 4+ words per line
+        # Check ratio of alphanumeric words to total
+        alpha_words = sum(1 for w in words if w.isalpha())
+        if alpha_words / len(words) > 0.7:
+            return False  # Too much English prose
+    
+    # Check if it has STRONG code-like patterns
+    return bool(CODE_LINE_PATTERN.search(stripped))
+
+
+def _is_comment_line(line: str) -> bool:
+    """Check if a line is a comment."""
+    stripped = line.strip()
+    return (
+        stripped.startswith('#') or
+        stripped.startswith('//') or
+        stripped.startswith('/*') or
+        stripped.startswith('*') or
+        stripped.startswith('<!--') or
+        stripped.startswith('--')
+    )
+
+
+def find_commented_code_blocks(file_path: Path, min_lines: int = 3) -> list[CommentedCodeBlock]:
+    """
+    Find blocks of commented-out code in a file.
+    
+    Looks for 3+ consecutive comment lines that appear to contain
+    actual code (assignments, function calls, etc.) rather than
+    explanatory prose.
+    
+    Args:
+        file_path: Path to the file to scan
+        min_lines: Minimum consecutive lines to consider a block (default: 3)
+        
+    Returns:
+        List of CommentedCodeBlock objects
+    """
+    blocks = []
+    
+    try:
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
+    except (OSError, IOError):
+        return []
+    
+    lines = content.splitlines()
+    
+    # Track current block
+    block_start = None
+    code_like_count = 0
+    consecutive_comments = 0
+    
+    for i, line in enumerate(lines):
+        line_num = i + 1  # 1-indexed
+        
+        if _is_comment_line(line):
+            if block_start is None:
+                block_start = line_num
+                consecutive_comments = 0
+                code_like_count = 0
+            
+            consecutive_comments += 1
+            if _looks_like_code(line):
+                code_like_count += 1
+        else:
+            # End of comment block
+            if block_start is not None:
+                # Check if it qualifies as commented-out code
+                # Require: at least min_lines AND at least 70% look like code
+                code_ratio = code_like_count / consecutive_comments if consecutive_comments > 0 else 0
+                if consecutive_comments >= min_lines and code_ratio >= 0.7:
+                    preview_line = lines[block_start - 1].strip()
+                    blocks.append(CommentedCodeBlock(
+                        file=str(file_path),
+                        start_line=block_start,
+                        end_line=block_start + consecutive_comments - 1,
+                        line_count=consecutive_comments,
+                        preview=preview_line[:60] + "..." if len(preview_line) > 60 else preview_line,
+                    ))
+            
+            # Reset
+            block_start = None
+            consecutive_comments = 0
+            code_like_count = 0
+    
+    # Handle block at end of file
+    if block_start is not None:
+        code_ratio = code_like_count / consecutive_comments if consecutive_comments > 0 else 0
+        if consecutive_comments >= min_lines and code_ratio >= 0.7:
+            preview_line = lines[block_start - 1].strip()
+            blocks.append(CommentedCodeBlock(
+                file=str(file_path),
+                start_line=block_start,
+                end_line=block_start + consecutive_comments - 1,
+                line_count=consecutive_comments,
+                preview=preview_line[:60] + "..." if len(preview_line) > 60 else preview_line,
+            ))
+    
+    return blocks
+
+
+def scan_for_commented_code(root: Path, min_lines: int = 3) -> list[CommentedCodeBlock]:
+    """
+    Scan a directory for commented-out code blocks.
+    
+    Args:
+        root: Directory to scan (or single file)
+        min_lines: Minimum consecutive lines to consider a block
+        
+    Returns:
+        List of all CommentedCodeBlock objects found
+    """
+    all_blocks = []
+    
+    for file_path in iter_code_files(root):
+        blocks = find_commented_code_blocks(file_path, min_lines)
+        all_blocks.extend(blocks)
+    
+    return all_blocks
 
 
 def scan_directory(root: Path) -> list[Marker]:

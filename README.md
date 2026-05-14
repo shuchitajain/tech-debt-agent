@@ -24,23 +24,43 @@ tech-debt-finder scan ./src
 tech-debt-finder scan --age 180
 
 # Output as JSON (for snapshots)
-tech-debt-finder scan --json > snapshots/2025-05-14.json
+tech-debt-finder scan --json > snapshots/2026-05-15.json
 
 # Include AI analysis (themes + explanations)
 tech-debt-finder scan --analyze
+
+# Scan for dead code (commented-out blocks + dormant files)
+tech-debt-finder scan --dead-code
+
+# Generate shareable markdown report (auto-dated filename)
+tech-debt-finder scan --report
+tech-debt-finder scan --dead-code --report
 
 # Compare two snapshots
 tech-debt-finder trend snapshot-old.json snapshot-new.json
 ```
 
+## LLM Setup (optional, for --analyze)
+
+Set one of these environment variables:
+
+```bash
+# Groq (FREE, recommended)
+export GROQ_API_KEY=gsk_...  # https://console.groq.com
+
+# Gemini (fallback)
+export GOOGLE_API_KEY=...    # https://aistudio.google.com/apikey
+```
+
 ## Features
 
 - **TODO/FIXME/HACK/TEMP/XXX detection** — with git blame for age and author
-- **Commented-out code detection** — heuristics for >3 lines of commented code
-- **Dormant files detection** — files nobody has touched in months
+- **Commented-out code detection** — heuristics for >3 lines of commented code (`--dead-code`)
+- **Dormant files detection** — files nobody has touched in 6+ months (`--dead-code`)
 - **Smart prioritization** — age + file activity = priority score
-- **AI-powered analysis** — group similar TODOs, explain why to fix first
-- **Trend tracking** — compare snapshots over time
+- **AI-powered analysis** — group similar TODOs, explain why to fix first (`--analyze`)
+- **Trend tracking** — compare snapshots over time (`trend` command)
+- **Markdown reports** — shareable, auto-dated reports (`--report`)
 
 ## Development
 

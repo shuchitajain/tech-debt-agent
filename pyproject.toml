@@ -19,10 +19,10 @@ requires-python = ">=3.11"
 
 # Dependencies — like 'dependencies:' in pubspec.yaml
 dependencies = [
-    "typer>=0.9.0",        # CLI framework (handles --help, arguments, etc.)
-    "rich>=13.0.0",        # Pretty terminal output (colors, tables)
-    "anthropic>=0.18.0",   # Claude API client (for LLM features)
-    "python-dotenv>=1.0.0" # Load .env files (for API keys)
+    "typer>=0.9.0",              # CLI framework (handles --help, arguments, etc.)
+    "rich>=13.0.0",              # Pretty terminal output (colors, tables)
+    "google-genai>=2.0.0",        # Gemini API client (FREE tier available!)
+    "python-dotenv>=1.0.0"       # Load .env files (for API keys)
 ]
 
 # This creates the 'tech-debt-finder' command you can run in terminal
