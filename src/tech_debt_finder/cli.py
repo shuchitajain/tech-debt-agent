@@ -244,6 +244,312 @@ def version():
     console.print(f"tech-debt-finder version [bold green]{__version__}[/]")
 
 
+@app.command()
+def agent(
+    path: str = typer.Argument(
+        ".",
+        help="Path to scan (file or directory)."
+    ),
+    tracker: str = typer.Option(
+        "github",
+        "--tracker", "-t",
+        help="Issue tracker to use: github, jira, azure"
+    ),
+    repo: str = typer.Option(
+        None,
+        "--repo", "-r",
+        help="GitHub repo in format 'owner/repo' (e.g., 'shuchitajain/tech-debt-finder')"
+    ),
+    notify: str = typer.Option(
+        None,
+        "--notify", "-n",
+        help="Notification channel: email, slack, teams"
+    ),
+    email_to: str = typer.Option(
+        None,
+        "--email-to",
+        help="Email recipient (required if --notify=email)"
+    ),
+    min_priority: str = typer.Option(
+        "high",
+        "--min-priority",
+        help="Minimum priority to create issues for: high, medium, low"
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview what would be created without actually creating issues"
+    ),
+    group_by_theme: bool = typer.Option(
+        True,
+        "--group/--no-group",
+        help="Group markers by theme (1 issue per theme) vs individual issues"
+    ),
+):
+    """
+    🤖 AI AGENT MODE: Scan, decide, and take action.
+    
+    This command transforms the tool from a passive scanner into an active agent:
+    
+    1. SCAN — Find all tech debt markers
+    2. DECIDE — Filter by priority, group by theme
+    3. ACT — Create issues in your tracker
+    4. NOTIFY — Send summary to your team
+    
+    Examples:
+        # Preview what would be created
+        tech-debt-finder agent --repo owner/repo --dry-run
+        
+        # Create GitHub issues for high-priority items
+        tech-debt-finder agent --repo shuchitajain/myrepo
+        
+        # Create issues and send email summary
+        tech-debt-finder agent --repo owner/repo --notify email --email-to team@company.com
+        
+        # Include medium priority items
+        tech-debt-finder agent --repo owner/repo --min-priority medium
+    
+    Required environment variables:
+        GITHUB_TOKEN — for GitHub tracker
+        EMAIL_USER, EMAIL_PASSWORD — for email notifications (Gmail app password)
+    """
+    from tech_debt_finder.prioritizer import group_by_priority
+    
+    # Validate required options
+    if tracker == "github" and not repo:
+        console.print("[red]Error:[/red] --repo required for GitHub tracker (e.g., --repo owner/repo)")
+        raise typer.Exit(code=1)
+    
+    if notify == "email" and not email_to:
+        console.print("[red]Error:[/red] --email-to required when using email notifications")
+        raise typer.Exit(code=1)
+    
+    scan_path = Path(path).resolve()
+    display_path = scan_path.name if path == "." else str(scan_path)
+    
+    if not scan_path.exists():
+        console.print(f"[red]Error:[/red] Path does not exist: {path}")
+        raise typer.Exit(code=1)
+    
+    # =========================================================================
+    # STEP 1: SCAN — Same as regular scan command
+    # =========================================================================
+    console.print(f"\n[bold blue]🤖 Agent Mode[/bold blue]")
+    console.print(f"[dim]Scanning: {display_path}[/dim]\n")
+    
+    console.print("[bold]Step 1:[/bold] 🔍 Scanning for tech debt...")
+    markers = scan_directory(scan_path)
+    
+    if not markers:
+        console.print("[green]✨ No tech debt found! Nothing to do.[/green]")
+        return
+    
+    # Enrich with git info
+    enrich_markers(markers)
+    markers = prioritize_markers(markers)
+    
+    console.print(f"  Found {len(markers)} markers")
+    
+    # =========================================================================
+    # STEP 2: DECIDE — Filter by priority
+    # =========================================================================
+    console.print(f"\n[bold]Step 2:[/bold] 🧠 Deciding what to act on...")
+    
+    groups = group_by_priority(markers)
+    priority_order = ["high", "medium", "low"]
+    
+    # Filter markers based on minimum priority
+    actionable_markers = []
+    for p in priority_order:
+        actionable_markers.extend(groups[p])
+        if p == min_priority:
+            break
+    
+    console.print(f"  Priority filter: {min_priority}+")
+    console.print(f"  Actionable markers: {len(actionable_markers)}")
+    
+    if not actionable_markers:
+        console.print(f"[yellow]No markers meet the {min_priority}+ priority threshold.[/yellow]")
+        return
+    
+    # Group by theme if requested (using LLM)
+    themes = None
+    if group_by_theme and len(actionable_markers) > 1:
+        from tech_debt_finder.llm import is_configured, group_by_theme as llm_group
+        
+        if is_configured():
+            console.print("  Grouping by theme (LLM)...")
+            themes = llm_group(actionable_markers)
+    
+    # =========================================================================
+    # STEP 3: ACT — Create issues
+    # =========================================================================
+    console.print(f"\n[bold]Step 3:[/bold] 🎯 Taking action...")
+    
+    if dry_run:
+        console.print("[yellow]  DRY RUN — No issues will be created[/yellow]")
+    
+    # Initialize tracker (skip in dry-run mode)
+    issue_tracker = None
+    if not dry_run:
+        try:
+            from tech_debt_finder.trackers import get_tracker
+            
+            if tracker == "github":
+                owner, repo_name = repo.split("/")
+                issue_tracker = get_tracker("github", owner=owner, repo=repo_name)
+            else:
+                console.print(f"[red]Tracker '{tracker}' not yet implemented[/red]")
+                raise typer.Exit(code=1)
+            
+            console.print(f"  Using tracker: {issue_tracker.get_name()}")
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(code=1)
+    else:
+        console.print(f"  Would use tracker: {tracker}")
+    
+    # Create issues
+    issues_created = []
+    issues_skipped = []
+    
+    if themes and themes.get("themes"):
+        # Create one issue per theme
+        console.print(f"  Creating issues by theme ({len(themes['themes'])} themes)...")
+        
+        for theme in themes["themes"]:
+            title = f"Tech Debt: {theme['name']}"
+            
+            # Build issue body
+            body_lines = [
+                f"## {theme['name']}",
+                "",
+                f"**{len(theme['marker_ids'])} related items found by tech-debt-finder**",
+                "",
+                "### Items",
+            ]
+            
+            for mid in theme["marker_ids"]:
+                if mid < len(actionable_markers):
+                    m = actionable_markers[mid]
+                    body_lines.append(f"- `{m.file}:{m.line}` — {m.marker_type}: {m.text}")
+            
+            body_lines.extend([
+                "",
+                "---",
+                "*Auto-generated by tech-debt-finder agent*",
+            ])
+            
+            body = "\n".join(body_lines)
+            labels = ["tech-debt", "auto-generated"]
+            
+            if dry_run:
+                console.print(f"  [dim]Would create:[/dim] {title}")
+                issues_created.append({"title": title, "url": "(dry-run)", "tracker": tracker})
+            else:
+                result = issue_tracker.create_issue(title, body, labels)
+                if result.success:
+                    console.print(f"  [green]✓[/green] Created: {title}")
+                    console.print(f"    [dim]{result.issue_url}[/dim]")
+                    issues_created.append({
+                        "title": title,
+                        "url": result.issue_url,
+                        "tracker": tracker,
+                    })
+                elif result.skipped_reason:
+                    console.print(f"  [yellow]⊘[/yellow] Skipped: {title}")
+                    console.print(f"    [dim]{result.skipped_reason}[/dim]")
+                    issues_skipped.append(title)
+                else:
+                    console.print(f"  [red]✗[/red] Failed: {title}")
+                    console.print(f"    [dim]{result.error}[/dim]")
+    else:
+        # Create one issue for all items
+        title = f"Tech Debt: {len(actionable_markers)} items in {display_path}"
+        
+        body_lines = [
+            f"## Tech Debt Report",
+            "",
+            f"**{len(actionable_markers)} items found by tech-debt-finder**",
+            "",
+            "### Items",
+        ]
+        
+        for m in actionable_markers[:20]:  # Limit to 20 items
+            body_lines.append(f"- `{m.file}:{m.line}` — {m.marker_type}: {m.text}")
+        
+        if len(actionable_markers) > 20:
+            body_lines.append(f"- ... and {len(actionable_markers) - 20} more")
+        
+        body_lines.extend([
+            "",
+            "---",
+            "*Auto-generated by tech-debt-finder agent*",
+        ])
+        
+        body = "\n".join(body_lines)
+        labels = ["tech-debt", "auto-generated"]
+        
+        if dry_run:
+            console.print(f"  [dim]Would create:[/dim] {title}")
+            issues_created.append({"title": title, "url": "(dry-run)", "tracker": tracker})
+        else:
+            result = issue_tracker.create_issue(title, body, labels)
+            if result.success:
+                console.print(f"  [green]✓[/green] Created: {title}")
+                console.print(f"    [dim]{result.issue_url}[/dim]")
+                issues_created.append({
+                    "title": title,
+                    "url": result.issue_url,
+                    "tracker": tracker,
+                })
+            elif result.skipped_reason:
+                console.print(f"  [yellow]⊘[/yellow] Skipped: {title}")
+                console.print(f"    [dim]{result.skipped_reason}[/dim]")
+            else:
+                console.print(f"  [red]✗[/red] Failed: {title}")
+                console.print(f"    [dim]{result.error}[/dim]")
+    
+    # =========================================================================
+    # STEP 4: NOTIFY — Send summary
+    # =========================================================================
+    if notify:
+        console.print(f"\n[bold]Step 4:[/bold] 📣 Sending notification...")
+        
+        try:
+            from tech_debt_finder.notifiers import get_notifier
+            
+            if notify == "email":
+                notifier = get_notifier("email", to_address=email_to)
+            else:
+                console.print(f"[red]Notifier '{notify}' not yet implemented[/red]")
+                raise typer.Exit(code=1)
+            
+            subject = f"Tech Debt Agent Report: {display_path}"
+            body = f"Scanned {display_path} and found {len(actionable_markers)} actionable items."
+            
+            if dry_run:
+                console.print(f"  [dim]Would notify via {notifier.get_name()}[/dim]")
+            else:
+                result = notifier.send_summary(subject, body, issues_created)
+                if result.success:
+                    console.print(f"  [green]✓[/green] Notification sent via {notifier.get_name()}")
+                else:
+                    console.print(f"  [red]✗[/red] Notification failed: {result.error}")
+        
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+    
+    # =========================================================================
+    # SUMMARY
+    # =========================================================================
+    console.print(f"\n[bold green]✅ Agent run complete![/bold green]")
+    console.print(f"  Issues created: {len(issues_created)}")
+    console.print(f"  Issues skipped: {len(issues_skipped)}")
+    if dry_run:
+        console.print(f"  [yellow](Dry run — nothing was actually created)[/yellow]")
+
+
 # This allows running the file directly: python -m tech_debt_finder.cli
 if __name__ == "__main__":
     app()

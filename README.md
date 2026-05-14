@@ -13,6 +13,8 @@ pip install -e .
 
 ## Usage
 
+### Basic Scanning (CLI Tool)
+
 ```bash
 # Basic scan
 tech-debt-finder scan
@@ -34,10 +36,41 @@ tech-debt-finder scan --dead-code
 
 # Generate shareable markdown report (auto-dated filename)
 tech-debt-finder scan --report
-tech-debt-finder scan --dead-code --report
 
 # Compare two snapshots
 tech-debt-finder trend snapshot-old.json snapshot-new.json
+```
+
+### 🤖 Agent Mode (AI Agent)
+
+The `agent` command transforms the tool into a true AI agent with a decision loop:
+
+```
+SCAN → DECIDE → ACT → NOTIFY
+```
+
+```bash
+# Preview what would be created (safe mode)
+tech-debt-finder agent --repo owner/repo --dry-run
+
+# Create GitHub issues for high-priority tech debt
+tech-debt-finder agent --repo shuchitajain/myrepo
+
+# Include medium priority items
+tech-debt-finder agent --repo owner/repo --min-priority medium
+
+# Create issues AND send email summary
+tech-debt-finder agent --repo owner/repo --notify email --email-to team@company.com
+
+# Group issues by theme (LLM-powered)
+tech-debt-finder agent --repo owner/repo --group
+```
+
+**Required environment variables:**
+```bash
+GITHUB_TOKEN=ghp_...           # GitHub personal access token
+EMAIL_USER=you@gmail.com       # For email notifications
+EMAIL_PASSWORD=xxxx xxxx xxxx  # Gmail app password
 ```
 
 ## LLM Setup (optional, for --analyze)
