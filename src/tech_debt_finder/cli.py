@@ -413,26 +413,36 @@ def agent(
     issues_created = []
     issues_skipped = []
     
-    if themes and themes.get("themes"):
+    # Build fingerprint -> marker index mapping for theme grouping
+    from tech_debt_finder.json_output import generate_fingerprint
+    fingerprint_to_idx = {generate_fingerprint(m): i for i, m in enumerate(actionable_markers)}
+    
+    if themes and hasattr(themes, 'themes') and themes.themes:
         # Create one issue per theme
-        console.print(f"  Creating issues by theme ({len(themes['themes'])} themes)...")
+        console.print(f"  Creating issues by theme ({len(themes.themes)} themes)...")
         
-        for theme in themes["themes"]:
-            title = f"Tech Debt: {theme['name']}"
+        for theme in themes.themes:
+            title = f"Tech Debt: {theme.name}"
+            
+            # Find markers by fingerprint
+            theme_markers = []
+            for fp in theme.fingerprints:
+                if fp in fingerprint_to_idx:
+                    theme_markers.append(actionable_markers[fingerprint_to_idx[fp]])
             
             # Build issue body
             body_lines = [
-                f"## {theme['name']}",
+                f"## {theme.name}",
                 "",
-                f"**{len(theme['marker_ids'])} related items found by tech-debt-finder**",
+                f"**{len(theme_markers)} related items found by tech-debt-finder**",
+                "",
+                f"_{theme.description}_",
                 "",
                 "### Items",
             ]
             
-            for mid in theme["marker_ids"]:
-                if mid < len(actionable_markers):
-                    m = actionable_markers[mid]
-                    body_lines.append(f"- `{m.file}:{m.line}` — {m.marker_type}: {m.text}")
+            for m in theme_markers:
+                body_lines.append(f"- `{m.file}:{m.line}` — {m.marker_type}: {m.text}")
             
             body_lines.extend([
                 "",
