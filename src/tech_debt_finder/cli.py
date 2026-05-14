@@ -32,7 +32,7 @@ from tech_debt_finder.reporter import (
     print_done_message,
     print_no_markers_found,
 )
-
+import subprocess
 
 # Create the CLI app — this is like the "router" for commands
 app = typer.Typer(
@@ -98,12 +98,12 @@ def scan(
     
     # For display, use folder name if scanning "." (current dir)
     display_path = scan_path.name if path == "." else str(scan_path)
-    
+
     # Validate path exists
     if not scan_path.exists():
         console.print(f"[red]Error:[/red] Path does not exist: {path}")
         raise typer.Exit(code=1)
-    
+
     # Step 1: Scan for markers (quiet mode for JSON output)
     if not json_output:
         print_scanning_message(display_path)
@@ -285,6 +285,11 @@ def agent(
         "--group/--no-group",
         help="Group markers by theme (1 issue per theme) vs individual issues"
     ),
+    branch: str = typer.Option(
+        None,
+        "--branch", "-b",
+        help="Git branch for GitHub links (auto-detected if not provided)"
+    ),
 ):
     """
     🤖 AI AGENT MODE: Scan, decide, and take action.
@@ -314,7 +319,22 @@ def agent(
         EMAIL_USER, EMAIL_PASSWORD — for email notifications (Gmail app password)
     """
     from tech_debt_finder.prioritizer import group_by_priority
-    
+    import subprocess
+
+    # Helper: get relative path from scan root
+    def get_rel_path(filepath):
+        try:
+            return str(Path(filepath).relative_to(scan_path.parent))
+        except ValueError:
+            return Path(filepath).name
+
+    # Helper: create clickable GitHub link
+    def gh_link(filepath, line_num):
+        rel = get_rel_path(filepath)
+        if not repo:
+            return f"`{rel}:{line_num}`"
+        return f"[{rel}:{line_num}](https://github.com/{repo}/blob/{git_branch}/{rel}#L{line_num})"
+
     # Validate required options
     if tracker == "github" and not repo:
         console.print("[red]Error:[/red] --repo required for GitHub tracker (e.g., --repo owner/repo)")
@@ -325,8 +345,21 @@ def agent(
         raise typer.Exit(code=1)
     
     scan_path = Path(path).resolve()
-    display_path = scan_path.name if path == "." else str(scan_path)
-    
+    display_path = scan_path.name  # Always use folder name only
+
+    # Auto-detect git branch if not provided
+    git_branch = branch
+    if not git_branch:
+        try:
+            r = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=scan_path if scan_path.is_dir() else scan_path.parent,
+                capture_output=True, text=True
+            )
+            git_branch = r.stdout.strip() if r.returncode == 0 else "main"
+        except Exception:
+            git_branch = "main"
+
     if not scan_path.exists():
         console.print(f"[red]Error:[/red] Path does not exist: {path}")
         raise typer.Exit(code=1)
@@ -434,16 +467,16 @@ def agent(
             body_lines = [
                 f"## {theme.name}",
                 "",
-                f"**{len(theme_markers)} related items found by tech-debt-finder**",
+                f"**{len(theme_markers)} items** — _{theme.description}_",
                 "",
-                f"_{theme.description}_",
-                "",
-                "### Items",
+                "| File | Type | Description |",
+                "|------|------|-------------|",
             ]
             
             for m in theme_markers:
-                body_lines.append(f"- `{m.file}:{m.line}` — {m.marker_type}: {m.text}")
-            
+                link = gh_link(m.file, m.line)
+                body_lines.append(f"| {link} | {m.marker_type} | {m.text} |")
+
             body_lines.extend([
                 "",
                 "---",
@@ -480,17 +513,19 @@ def agent(
         body_lines = [
             f"## Tech Debt Report",
             "",
-            f"**{len(actionable_markers)} items found by tech-debt-finder**",
+            f"**{len(actionable_markers)} items** found in `{display_path}`",
             "",
-            "### Items",
+            "| File | Type | Description |",
+            "|------|------|-------------|",
         ]
         
         for m in actionable_markers[:20]:  # Limit to 20 items
-            body_lines.append(f"- `{m.file}:{m.line}` — {m.marker_type}: {m.text}")
-        
+            link = gh_link(m.file, m.line)
+            body_lines.append(f"| {link} | {m.marker_type} | {m.text} |")
+
         if len(actionable_markers) > 20:
-            body_lines.append(f"- ... and {len(actionable_markers) - 20} more")
-        
+            body_lines.append(f"| ... | | *+{len(actionable_markers) - 20} more items* |")
+
         body_lines.extend([
             "",
             "---",
