@@ -1,0 +1,42 @@
+# pyproject.toml — This is like pubspec.yaml in Flutter
+# It tells Python:
+#   1. What our project is called
+#   2. What packages we need (dependencies)
+#   3. How to install/run it
+
+[build-system]
+# These are the tools Python uses to build/install packages
+# You don't need to understand this — it's boilerplate
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tech-debt-finder"
+version = "0.1.0"
+description = "CLI tool to find and prioritize stale TODOs, FIXMEs, and code rot"
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Dependencies — like 'dependencies:' in pubspec.yaml
+dependencies = [
+    "typer>=0.9.0",        # CLI framework (handles --help, arguments, etc.)
+    "rich>=13.0.0",        # Pretty terminal output (colors, tables)
+    "anthropic>=0.18.0",   # Claude API client (for LLM features)
+    "python-dotenv>=1.0.0" # Load .env files (for API keys)
+]
+
+# This creates the 'tech-debt-finder' command you can run in terminal
+# Like how Flutter creates 'flutter' command
+[project.scripts]
+tech-debt-finder = "tech_debt_finder.cli:app"
+
+# Optional: development dependencies (for testing)
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0"
+]
+
+# Tell Python where to find our source code
+[tool.setuptools.packages.find]
+where = ["src"]
