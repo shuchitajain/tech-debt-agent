@@ -25,12 +25,14 @@ dependencies = [
     "groq>=0.4.0",               # Groq API client (FREE, fast inference)
     "requests>=2.31.0",          # HTTP client for API calls (GitHub, etc.)
     "python-dotenv>=1.0.0",      # Load .env files (for API keys)
+    "mcp[cli]>=1.2.0",           # Model Context Protocol SDK (for Copilot agent mode integration)
 ]
 
 # This creates the 'tech-debt-finder' command you can run in terminal
 # Like how Flutter creates 'flutter' command
 [project.scripts]
 tech-debt-finder = "tech_debt_finder.cli:app"
+tech-debt-mcp = "tech_debt_finder.server:main"
 
 # Optional: development dependencies (for testing)
 [project.optional-dependencies]
