@@ -1,6 +1,7 @@
 # tech-debt-finder
 
 CLI tool to find and prioritize stale TODOs, FIXMEs, and code rot in your codebase.
+SCAN → DECIDE → ACT → NOTIFY
 
 ## Installation
 
