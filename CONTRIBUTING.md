@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to tech-debt-finder.
+Thanks for your interest in contributing to tech-debt-agent.
 
 ## What to work on
 
@@ -12,7 +12,7 @@ If you want to propose something new, open an issue first before writing code. I
 
 ```bash
 git clone https://github.com/shuchitajain/tech-debt-agent
-cd tech-debt-finder
+cd tech-debt-agent
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```

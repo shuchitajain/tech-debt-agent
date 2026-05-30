@@ -2,7 +2,7 @@
 
 <img src="banner.png" width="100%" />
 
-# tech-debt-finder
+# tech-debt-agent
 > AI agent that surfaces, prioritises, and files your technical debt - without touching your code.
 
 <p>
@@ -23,7 +23,7 @@
 
 ---
 
-tech-debt-finder is additive by design. It works alongside your existing setup for GitHub Copilot, Claude Code, and Cursor - it does not replace your coding assistant or modify your source files.
+tech-debt-agent is additive by design. It works alongside your existing setup for GitHub Copilot, Claude Code, and Cursor - it does not replace your coding assistant or modify your source files.
 
 ---
 

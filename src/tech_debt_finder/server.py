@@ -1,7 +1,7 @@
 """
 server.py - MCP (Model Context Protocol) server
 
-Exposes tech-debt-finder's core functions as tools callable by AI agents
+Exposes tech-debt-agent's core functions as tools callable by AI agents
 (GitHub Copilot agent mode, Claude Desktop, Cursor, etc.).
 
 This is the "agentic ways of working" surface: instead of running CLI commands,
@@ -48,7 +48,7 @@ from tech_debt_finder.json_output import (
 from tech_debt_finder.trend import compare_snapshots
 
 
-mcp = FastMCP("tech-debt-finder")
+mcp = FastMCP("tech-debt-agent")
 
 
 # =============================================================================
