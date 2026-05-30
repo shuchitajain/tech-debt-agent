@@ -36,7 +36,7 @@ Works in GitHub Copilot, Claude Code, and Cursor. No CLI. No package manager. Co
 From your project root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuchitajain/tech-debt-finder/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shuchitajain/tech-debt-agent/main/scripts/install.sh | bash
 ```
 
 That's it. The script:
@@ -129,7 +129,7 @@ Writes to `.tech-debt-wontfix.json` - commit this file so the exclusion is share
 
 **Tools don't appear in Copilot:** confirm Copilot Chat is in **Agent** mode (mode dropdown at top of chat). MCP tools don't show in Ask or Edit modes.
 
-**Server fails to start:** run `uvx --from git+https://github.com/shuchitajain/tech-debt-finder tech-debt-mcp` in a terminal. If it hangs silently, it's working (waiting for stdio JSON-RPC). If it errors, `uv` may need updating: `uv self update`.
+**Server fails to start:** run `uvx --from git+https://github.com/shuchitajain/tech-debt-agent tech-debt-mcp` in a terminal. If it hangs silently, it's working (waiting for stdio JSON-RPC). If it errors, `uv` may need updating: `uv self update`.
 
 **Restart after config changes:** `Cmd+Shift+P` → `MCP: List Servers` → `tech-debt-mcp` → Restart.
 

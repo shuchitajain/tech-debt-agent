@@ -2,10 +2,10 @@
 # install.sh - Zero-clone installer for tech-debt-agent
 #
 # Usage (from your project root):
-#   curl -fsSL https://raw.githubusercontent.com/shuchitajain/tech-debt-finder/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/shuchitajain/tech-debt-agent/main/scripts/install.sh | bash
 #
 # Or with an explicit target path:
-#   curl -fsSL https://raw.githubusercontent.com/shuchitajain/tech-debt-finder/main/scripts/install.sh | bash -s -- /path/to/project
+#   curl -fsSL https://raw.githubusercontent.com/shuchitajain/tech-debt-agent/main/scripts/install.sh | bash -s -- /path/to/project
 #
 # What this does:
 #   1. Downloads agent files from GitHub directly (no clone required)
@@ -20,7 +20,7 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-REPO="shuchitajain/tech-debt-finder"
+REPO="shuchitajain/tech-debt-agent"
 BRANCH="main"
 RAW_BASE="https://raw.githubusercontent.com/$REPO/$BRANCH"
 TARGET="${1:-$(pwd)}"
@@ -77,7 +77,7 @@ mkdir -p "$TARGET/.ai/tech-debt-agent/outputs/scans"
 MCP_SERVER_BLOCK='{
   "type": "stdio",
   "command": "uvx",
-  "args": ["--from", "git+https://github.com/shuchitajain/tech-debt-finder", "tech-debt-mcp"],
+  "args": ["--from", "git+https://github.com/shuchitajain/tech-debt-agent", "tech-debt-mcp"],
   "envFile": "${workspaceFolder}/.env"
 }'
 

@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/shuchitajain/tech-debt-finder",
+        "git+https://github.com/shuchitajain/tech-debt-agent",
         "tech-debt-mcp"
       ],
       "envFile": "${workspaceFolder}/.env"

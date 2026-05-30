@@ -11,7 +11,7 @@ If you want to propose something new, open an issue first before writing code. I
 ## Setup
 
 ```bash
-git clone https://github.com/shuchitajain/tech-debt-finder
+git clone https://github.com/shuchitajain/tech-debt-agent
 cd tech-debt-finder
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

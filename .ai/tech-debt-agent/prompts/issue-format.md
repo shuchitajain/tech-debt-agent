@@ -48,7 +48,7 @@ Do not write generic boilerplate.>
 
 ---
 
-*Filed by [tech-debt-agent](https://github.com/shuchitajain/tech-debt-finder). Fingerprint: `<fingerprint>`*
+*Filed by [tech-debt-agent](https://github.com/shuchitajain/tech-debt-agent). Fingerprint: `<fingerprint>`*
 ```
 
 ## Labels
