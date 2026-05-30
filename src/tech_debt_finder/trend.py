@@ -1,5 +1,5 @@
 """
-trend.py — Compare snapshots to track tech debt over time
+trend.py - Compare snapshots to track tech debt over time
 
 This module answers questions like:
 - How many TODOs did we fix this sprint?
@@ -188,7 +188,7 @@ def print_trend_report(report: TrendReport) -> None:
         old_count = report.old_by_priority.get(priority, 0)
         new_count = report.new_by_priority.get(priority, 0)
         change = new_count - old_count
-        change_str = f"{change:+d}" if change != 0 else "—"
+        change_str = f"{change:+d}" if change != 0 else "-"
         change_style = "red" if change > 0 else "green" if change < 0 else "dim"
         
         priority_color = {"high": "red", "medium": "yellow", "low": "green"}[priority]
@@ -206,7 +206,7 @@ def print_trend_report(report: TrendReport) -> None:
     if report.resolved_markers:
         console.print(f"\n[bold green]✅ Resolved ({report.resolved_count}):[/bold green]")
         for m in report.resolved_markers[:5]:
-            console.print(f"  [dim]{m['file']}:{m['line']}[/dim] — {m['text'][:50]}")
+            console.print(f"  [dim]{m['file']}:{m['line']}[/dim] - {m['text'][:50]}")
         if len(report.resolved_markers) > 5:
             console.print(f"  [dim]... and {len(report.resolved_markers) - 5} more[/dim]")
     
@@ -214,7 +214,7 @@ def print_trend_report(report: TrendReport) -> None:
     if report.added_markers:
         console.print(f"\n[bold red]🆕 Added ({report.added_count}):[/bold red]")
         for m in report.added_markers[:5]:
-            console.print(f"  [dim]{m['file']}:{m['line']}[/dim] — {m['text'][:50]}")
+            console.print(f"  [dim]{m['file']}:{m['line']}[/dim] - {m['text'][:50]}")
         if len(report.added_markers) > 5:
             console.print(f"  [dim]... and {len(report.added_markers) - 5} more[/dim]")
     

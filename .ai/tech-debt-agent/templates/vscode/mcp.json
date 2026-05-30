@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "tech-debt-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/shuchitajain/tech-debt-finder",
+        "tech-debt-mcp"
+      ],
+      "envFile": "${workspaceFolder}/.env"
+    }
+  }
+}

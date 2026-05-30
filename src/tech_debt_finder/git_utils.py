@@ -1,5 +1,5 @@
 """
-git_utils.py — Get git information for TODO markers
+git_utils.py - Get git information for TODO markers
 
 This module uses git commands to find out:
 1. WHO added a TODO (author)
@@ -23,7 +23,7 @@ Dart equivalent: Process.run()
 
 The subprocess.run() function:
 - Takes a LIST of command parts: ['git', 'blame', '-L', '12,12', 'file.py']
-  (NOT a single string — this avoids shell injection security issues)
+  (NOT a single string - this avoids shell injection security issues)
 - capture_output=True → capture stdout and stderr
 - text=True → return strings instead of bytes
 - cwd=... → run in a specific directory
@@ -53,7 +53,7 @@ class DormantFile:
 
 
 # =============================================================================
-# GIT BLAME — Who wrote this line and when?
+# GIT BLAME - Who wrote this line and when?
 # =============================================================================
 
 def get_blame_info(file_path: str, line_number: int) -> dict:
@@ -157,7 +157,7 @@ def get_blame_info(file_path: str, line_number: int) -> dict:
 
 
 # =============================================================================
-# GIT LOG — How many times has this file been modified?
+# GIT LOG - How many times has this file been modified?
 # =============================================================================
 
 def get_file_modification_count(file_path: str, since_date: Optional[str] = None) -> int:
@@ -248,7 +248,7 @@ def get_last_modified_date(file_path: str) -> Optional[str]:
 
 
 # =============================================================================
-# ENRICH MARKERS — Add git info to markers
+# ENRICH MARKERS - Add git info to markers
 # =============================================================================
 
 def enrich_marker_with_git_info(marker: Marker) -> Marker:
@@ -297,7 +297,7 @@ def enrich_markers(markers: list[Marker]) -> list[Marker]:
 
 
 # =============================================================================
-# DORMANT FILES — Files nobody has touched recently
+# DORMANT FILES - Files nobody has touched recently
 # =============================================================================
 
 def is_file_dormant(file_path: str, dormant_days: int = 180) -> bool:

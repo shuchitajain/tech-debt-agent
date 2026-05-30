@@ -34,9 +34,6 @@ ENV/
 # Environment variables (contains API keys!)
 .env
 
-# Local snapshots (user-specific)
-snapshots/
-
 # Test coverage
 htmlcov/
 .tox/

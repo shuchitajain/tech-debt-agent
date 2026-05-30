@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "tech-debt-mcp": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/shuchitajain/tech-debt-finder",
+        "tech-debt-mcp"
+      ],
+      "envFile": "${workspaceFolder}/.env"
+    }
+  }
+}

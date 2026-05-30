@@ -1,4 +1,4 @@
-# __init__.py — This file makes the folder a "Python package"
+# __init__.py - This file makes the folder a "Python package"
 # Think of it like a library in Dart that can be imported
 # 
 # In Dart:    import 'package:myapp/myapp.dart';

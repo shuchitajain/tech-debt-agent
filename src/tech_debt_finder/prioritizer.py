@@ -1,5 +1,5 @@
 """
-prioritizer.py — Calculate priority scores for markers
+prioritizer.py - Calculate priority scores for markers
 
 The scoring formula:
     score = (age_score × 0.6) + (activity_score × 0.4)
@@ -40,7 +40,7 @@ from tech_debt_finder.scanner import Marker
 
 
 # =============================================================================
-# CONFIGURATION — Tune these to change behavior
+# CONFIGURATION - Tune these to change behavior
 # =============================================================================
 
 # Maximum age we consider (anything older gets same score)
@@ -163,7 +163,7 @@ def get_priority_bucket(score: float) -> str:
 
 
 # =============================================================================
-# MAIN FUNCTION — Prioritize markers
+# MAIN FUNCTION - Prioritize markers
 # =============================================================================
 
 def prioritize_marker(marker: Marker) -> Marker:

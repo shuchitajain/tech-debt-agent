@@ -1,5 +1,5 @@
 """
-scanner.py — Find code rot markers in files
+scanner.py - Find code rot markers in files
 
 This module walks through files and finds:
 - TODO, FIXME, HACK, TEMP, XXX comments
@@ -107,7 +107,7 @@ class CommentedCodeBlock:
 
 
 # =============================================================================
-# PATTERNS — What we're looking for
+# PATTERNS - What we're looking for
 # =============================================================================
 
 # We want to find TODOs that are inside COMMENTS, not in regular code.
@@ -196,7 +196,7 @@ SKIP_FOLDERS = {
 
 
 # =============================================================================
-# FILE WALKING — Find all code files
+# FILE WALKING - Find all code files
 # =============================================================================
 
 def iter_code_files(root: Path) -> Iterator[Path]:
@@ -242,7 +242,7 @@ def iter_code_files(root: Path) -> Iterator[Path]:
 
 
 # =============================================================================
-# SCANNER — Find markers in a file
+# SCANNER - Find markers in a file
 # =============================================================================
 
 def scan_file(file_path: Path) -> list[Marker]:
@@ -268,7 +268,7 @@ def scan_file(file_path: Path) -> list[Marker]:
         # errors="ignore" skips characters that can't be decoded (rare)
         content = file_path.read_text(encoding="utf-8", errors="ignore")
     except (OSError, IOError) as e:
-        # File can't be read (permissions, etc.) — skip silently
+        # File can't be read (permissions, etc.) - skip silently
         # In production, you might want to log this
         return []
     
@@ -549,7 +549,7 @@ def filter_by_age(markers: list[Marker], min_age_days: int) -> list[Marker]:
 
 
 # =============================================================================
-# TESTING — Run this file directly to test
+# TESTING - Run this file directly to test
 # =============================================================================
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 """
-json_output.py — JSON serialization for snapshots
+json_output.py - JSON serialization for snapshots
 
 Snapshots allow you to:
 1. Save scan results to a file
@@ -53,7 +53,7 @@ from tech_debt_finder.scanner import Marker, count_by_type
 from tech_debt_finder.prioritizer import group_by_priority
 
 
-# Schema version — increment when format changes
+# Schema version - increment when format changes
 SCHEMA_VERSION = "1.0"
 
 
@@ -74,7 +74,7 @@ def generate_fingerprint(marker: Marker) -> str:
     content = f"{marker.file}:{marker.marker_type}:{marker.text}"
     
     # Create MD5 hash and take first 12 characters
-    # MD5 is fine here — we're not doing security, just deduplication
+    # MD5 is fine here - we're not doing security, just deduplication
     hash_obj = hashlib.md5(content.encode("utf-8"))
     return hash_obj.hexdigest()[:12]
 

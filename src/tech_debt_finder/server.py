@@ -1,5 +1,5 @@
 """
-server.py — MCP (Model Context Protocol) server
+server.py - MCP (Model Context Protocol) server
 
 Exposes tech-debt-finder's core functions as tools callable by AI agents
 (GitHub Copilot agent mode, Claude Desktop, Cursor, etc.).
@@ -28,9 +28,12 @@ exchanges JSON-RPC messages over stdin/stdout. Configured via .vscode/mcp.json.
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 from typing import Any
 
+import requests
 from mcp.server.fastmcp import FastMCP
 
 from tech_debt_finder.scanner import scan_directory
@@ -132,7 +135,7 @@ def save_tech_debt_snapshot(path: str, output_path: str) -> dict[str, Any]:
     """
     Scan a repository and save the results as a JSON snapshot file.
 
-    Snapshots are used for trend tracking — compare two snapshots taken at
+    Snapshots are used for trend tracking - compare two snapshots taken at
     different times to see what's been resolved vs added.
 
     Args:
@@ -216,7 +219,7 @@ def explain_marker(path: str, file: str, line: int) -> dict[str, Any]:
     """
     Get full details on a single tech debt marker by file and line number.
 
-    Useful when a developer asks "tell me about the TODO on line 142 of auth.dart" —
+    Useful when a developer asks "tell me about the TODO on line 142 of auth.dart" -
     returns the marker's text, author, age, priority score, and reasoning context
     (file modification count, priority bucket).
 
@@ -249,6 +252,235 @@ def explain_marker(path: str, file: str, line: int) -> dict[str, Any]:
         "reason": f"No marker found at {file}:{line}",
         "scanned_path": str(Path(path).expanduser().resolve()),
     }
+
+
+# =============================================================================
+# Agentic tools - mutation / triage surface
+# =============================================================================
+
+@mcp.tool()
+def generate_triage_report(
+    path: str,
+    limit: int = 30,
+    age_days: int = 0,
+) -> dict[str, Any]:
+    """
+    Run the full scan+prioritize pipeline and return a structured triage report.
+
+    This is the primary entry point for the tech-debt agent. Call this first
+    to get a complete picture of the repo's tech debt before deciding which
+    items to file as GitHub issues.
+
+    Args:
+        path: Absolute or ~-prefixed path to the repository to scan.
+        limit: Maximum markers to include per priority bucket. Default 30.
+        age_days: Minimum age filter in days. Default 0 (no filter).
+
+    Returns:
+        Dict with keys:
+        - scan_path: resolved absolute path scanned
+        - scan_date: ISO timestamp
+        - total_markers: int
+        - by_priority: {high, medium, low} with counts and marker lists
+          Each marker includes: file, line, type, text, author, age_days,
+          file_modifications, priority_score, priority_bucket, fingerprint
+        - by_type: {TODO, FIXME, HACK, TEMP, XXX} counts
+        - scoring_notes: explanation of the scoring formula for agent reasoning
+    """
+    markers = _scan_and_prioritize(path, age_days)
+    groups = group_by_priority(markers)
+
+    def _trim(bucket: list, n: int) -> list[dict]:
+        return [marker_to_dict(m) for m in bucket[:n]]
+
+    snapshot = create_snapshot(markers, str(Path(path).expanduser().resolve()))
+
+    return {
+        "scan_path": snapshot["scan_path"],
+        "scan_date": snapshot["scan_date"],
+        "total_markers": snapshot["total_markers"],
+        "by_priority": {
+            "high": {
+                "count": len(groups["high"]),
+                "markers": _trim(groups["high"], limit),
+            },
+            "medium": {
+                "count": len(groups["medium"]),
+                "markers": _trim(groups["medium"], limit),
+            },
+            "low": {
+                "count": len(groups["low"]),
+                "markers": _trim(groups["low"], limit),
+            },
+        },
+        "by_type": snapshot["by_type"],
+        "scoring_notes": (
+            "score = log(age_days+1)/log(731) * 0.6 + min(file_modifications/50,1) * 0.4. "
+            "HIGH > 0.6, MEDIUM > 0.3, LOW <= 0.3. "
+            "Age is capped at 730 days (2 years). Activity is capped at 50 file modifications."
+        ),
+    }
+
+
+@mcp.tool()
+def check_existing_issue(repo: str, title: str) -> dict[str, Any]:
+    """
+    Check if a GitHub issue with the given title already exists.
+
+    Call this before create_github_issue to avoid filing duplicates.
+    Uses GitHub's search API with an exact title match.
+
+    Args:
+        repo: GitHub repo in "owner/repo" format (e.g. "shuchitajain/my-app").
+        title: Exact issue title to search for.
+
+    Returns:
+        Dict with keys:
+        - exists: bool
+        - issue_url: URL of existing issue if found, else null
+        - issue_number: int if found, else null
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return {"exists": False, "issue_url": None, "issue_number": None,
+                "error": "GITHUB_TOKEN not set"}
+
+    query = f'"{title}" in:title repo:{repo} is:issue'
+    try:
+        resp = requests.get(
+            "https://api.github.com/search/issues",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            params={"q": query},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("total_count", 0) > 0:
+                item = data["items"][0]
+                return {
+                    "exists": True,
+                    "issue_url": item["html_url"],
+                    "issue_number": item["number"],
+                }
+            return {"exists": False, "issue_url": None, "issue_number": None}
+        return {"exists": False, "issue_url": None, "issue_number": None,
+                "error": f"GitHub API returned {resp.status_code}"}
+    except requests.exceptions.RequestException as exc:
+        return {"exists": False, "issue_url": None, "issue_number": None,
+                "error": str(exc)}
+
+
+@mcp.tool()
+def create_github_issue(
+    repo: str,
+    title: str,
+    body: str,
+    labels: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Create a GitHub issue for a tech debt item.
+
+    Always call check_existing_issue first to avoid duplicates.
+    Requires the GITHUB_TOKEN environment variable to be set with
+    repo (private) or public_repo (public) scope.
+
+    Args:
+        repo: GitHub repo in "owner/repo" format.
+        title: Issue title. Convention: "[tech-debt] TYPE: file description"
+        body: Issue body in Markdown. Include file, line, author, age, code context.
+        labels: Optional list of label names (e.g. ["tech-debt", "high-priority"]).
+                Labels must already exist in the repo.
+
+    Returns:
+        Dict with keys:
+        - success: bool
+        - issue_url: URL of the created issue (if success)
+        - issue_number: int (if success)
+        - error: error message (if not success)
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return {"success": False, "error": "GITHUB_TOKEN not set"}
+
+    payload: dict[str, Any] = {"title": title, "body": body}
+    if labels:
+        payload["labels"] = labels
+
+    try:
+        resp = requests.post(
+            f"https://api.github.com/repos/{repo}/issues",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            json=payload,
+            timeout=30,
+        )
+        if resp.status_code == 201:
+            data = resp.json()
+            return {
+                "success": True,
+                "issue_url": data["html_url"],
+                "issue_number": data["number"],
+            }
+        error_msg = resp.json().get("message", resp.text)
+        return {"success": False, "error": f"GitHub API error ({resp.status_code}): {error_msg}"}
+    except requests.exceptions.RequestException as exc:
+        return {"success": False, "error": str(exc)}
+
+
+@mcp.tool()
+def mark_wontfix(
+    repo_path: str,
+    fingerprint: str,
+    reason: str,
+) -> dict[str, Any]:
+    """
+    Mark a tech debt marker as won't-fix to exclude it from future triage reports.
+
+    Writes to <repo_path>/.tech-debt-wontfix.json. This file should be committed
+    to the repo so the exclusion persists across runs and is shared with the team.
+
+    Args:
+        repo_path: Absolute path to the repository root.
+        fingerprint: The marker's fingerprint (MD5 hash from the triage report).
+        reason: Why this is being marked won't-fix (written to the file).
+
+    Returns:
+        Dict with keys:
+        - success: bool
+        - wontfix_path: path to the wontfix file
+        - total_wontfix: total number of wontfix entries after this addition
+    """
+    wontfix_file = Path(repo_path).expanduser().resolve() / ".tech-debt-wontfix.json"
+
+    existing: dict[str, Any] = {}
+    if wontfix_file.exists():
+        try:
+            existing = json.loads(wontfix_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+
+    from datetime import datetime, timezone
+    existing[fingerprint] = {
+        "reason": reason,
+        "marked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        wontfix_file.write_text(json.dumps(existing, indent=2))
+        return {
+            "success": True,
+            "wontfix_path": str(wontfix_file),
+            "total_wontfix": len(existing),
+        }
+    except OSError as exc:
+        return {"success": False, "error": str(exc)}
 
 
 # =============================================================================
